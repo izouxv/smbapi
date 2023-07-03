@@ -1,0 +1,25 @@
+package smb
+
+import (
+	"testing"
+
+	"github/izouxv/smbapi/util"
+)
+
+func Test_write(t *testing.T) {
+	hexString := "fe534d4240000100000000000900000100000000000000000500000000000000fffe000000000000306d701d35691a170000000000000000000000000000000031007000480000000000000000000000000000000000000002000000000000000000000000000000000000000000000005000b0310000000480000000000000000100010000000000100000000000100c84f324b7016d30112785a47bf6ee18803000000045d888aeb1cc9119fe808002b10486002000000"
+	allbytes := util.BytesFromHex(hexString)
+
+	session := NewSessionServer(true, nil, nil, nil)
+	session.sessionID = 0x171a69351d706d30
+	var ctx = &DataCtx{
+		session: session,
+		handle:  config.Handle,
+	}
+
+	_, _, stat := ActionFunc(ctx, allbytes)
+	if stat != StatusOk {
+		t.Fatalf("err")
+	}
+
+}

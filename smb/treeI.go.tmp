@@ -1,0 +1,48 @@
+package smb
+
+import (
+	"time"
+)
+
+type FileId uint64
+
+type StatI interface {
+	Name() string
+	Size() int64
+	ModTime() time.Time
+	IsReadOnly() bool
+	IsExecutable() bool // for Dir false
+	IsDir() bool
+	IsLink() bool
+	Link() string
+}
+
+type TreeI interface {
+	Name() string
+	Id() uint32
+	Close() error
+
+	OpenFile(path string, flags int) (FileId, error)
+	CloseFile(FileId) error
+	NameOfFile(FileId) string // full path
+	//StatByPath(path string, followLinks bool) (Stat, error)
+	StatById(id FileId, followLinks bool) (StatI, error)
+
+	// For file only
+	Read(id FileId, p []byte) (n int, err error)
+	Write(id FileId, p []byte) (n int, err error)
+	Seek(id FileId, offset int64) error
+	CurrentPosition(id FileId) int64
+
+	// For directory only
+	ReadDir(id FileId, n int) ([]Stat, error)
+
+	Mkdir(path string) error
+	Symlink(oldname, newname string) error
+	Remove(path string, recursive bool) error
+
+	Truncate(id FileId, size int64) error
+	ChangeMode(id FileId, allowWrite bool, allowExecute bool) error // allowExecute only for files
+	Sync(FileId) error
+	SyncAll() error
+}
