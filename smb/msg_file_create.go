@@ -335,7 +335,7 @@ func (data *CreateRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 		CreateAction:  createAction,
 	}
 
-	if data.TreeID == ctx.session.anchors[NamedPipeShareName].tid {
+	if data.TreeID == ctx.session.GetAnchor(NamedPipeShareName).tid {
 		if Filename != k_srvsvc {
 			return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
 		}

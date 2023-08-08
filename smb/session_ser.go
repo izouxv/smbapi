@@ -146,6 +146,7 @@ func (s *SessionS) NegotiateProtocolServer() (err error) {
 }
 
 func (session *SessionS) SetActiveAnchorKey(activeAnchorKey string) bool {
+	activeAnchorKey = strings.ToUpper(activeAnchorKey)
 	_, ok := session.anchors[activeAnchorKey]
 	if ok {
 		session.activeAnchorKey = activeAnchorKey
@@ -165,7 +166,7 @@ func (session *SessionS) SetAnchor(fileNum uint64, items []*Anchor) {
 }
 
 func (s *SessionS) GetAnchor(name string) *Anchor {
-	item, ok := s.anchors[name]
+	item, ok := s.anchors[strings.ToUpper(name)]
 	if !ok {
 		return nil
 	}
