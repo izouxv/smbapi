@@ -38,9 +38,9 @@ type SetInfoResponse struct {
 func (data *SetInfoRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 	data.Header.Flags = SMB2_FLAGS_RESPONSE
 
-	if !data.FileId.IsEqual(LastGUID) {
-		panic(-1)
-	}
+	// if !data.FileId.IsEqual(LastGUID) {
+	// 	panic(-1)
+	// }
 
 	if len(data.Buffer) > 0 {
 		fileid := ctx.FileID(data.FileId)
@@ -107,6 +107,7 @@ func (data *SetInfoRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 		}
 	}
 
+	data.Header.Status = StatusOk
 	resp := SetInfoResponse{
 		Header:        data.Header,
 		StructureSize: 2,

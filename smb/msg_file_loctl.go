@@ -59,7 +59,7 @@ type IOCTLRequest struct {
 // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/f70eccb6-e1be-4db8-9c47-9ac86ef18dbb
 type IOCTLResponse struct {
 	Header
-	StructureSize uint16
+	StructureSize uint16 //always 49
 	Reserved      uint16
 	Function      uint32 //CtlCode
 	GUIDHandle    GUID   //FileId    []byte `smb:"fixed:16"`
@@ -69,28 +69,46 @@ type IOCTLResponse struct {
 	BlobLength2   uint32 //OutputCount
 	Flags         uint32
 	Reserved2     uint32
+	Buffer        []byte
 }
 
 func (data *IOCTLRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 	data.Header.Flags = SMB2_FLAGS_RESPONSE
 
-	if data.Flags == SMB2_0_IOCTL_IS_FSCTL {
+	if data.Flags != SMB2_0_IOCTL_IS_FSCTL {
+		return ERR(data.Header, STATUS_NOT_SUPPORTED)
+	}
+	if !data.GUIDHandle.IsSvrSvc(ctx.session) {
+		return ERR(data.Header, STATUS_NOT_SUPPORTED)
+	}
+
+	var pdudata []byte
+	switch data.Function {
+	case FSCTL_PIPE_WAIT:
 		piple := FSCTLPIPEWAITRequestStruct{}
 		if err := encoder.Unmarshal(data.Buffer, &piple); err != nil {
 		}
 		nameStr := string(piple.Name)
 		logx.Debug("Unmarshalling Ioctl stdin pipe response ["+nameStr+"]", nil)
-	}
-
-	if data.Function == FSCTL_PIPE_TRANSCEIVE {
-
+	case FSCTL_PIPE_TRANSCEIVE:
+		_, err := DcerpcWrite(ctx, &WriteRequest{Data: data.Buffer})
+		if err != nil {
+			return ERR(data.Header, STATUS_UNSUCCESSFUL)
+		}
+		pdudata, err = DcerpcReadRaw(ctx)
+		if err != nil {
+			return ERR(data.Header, STATUS_UNSUCCESSFUL)
+		}
 	}
 
 	resp := IOCTLResponse{
 		Header:        data.Header,
-		StructureSize: 89,
+		StructureSize: 0x31,
 		Function:      data.Function,
 		GUIDHandle:    data.GUIDHandle,
+		BlobOffset2:   0x70,
+		BlobLength2:   uint32(len(pdudata)),
+		Buffer:        pdudata,
 	}
 	return &resp, nil
 }

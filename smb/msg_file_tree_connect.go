@@ -133,6 +133,7 @@ func (data *TreeConnectRequest) ServerAction(ctx *DataCtx) (interface{}, error) 
 		logx.Printf("path: %v", path)
 	}
 
+	path = strings.ToUpper(path)
 	logx.Printf("path: %v", path)
 	// tid := atomic.AddUint32(&ctx.s.treeId, 1)
 	// tree := CreateTree(tid, path, "./")

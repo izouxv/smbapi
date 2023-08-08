@@ -465,6 +465,22 @@ func PDUUuidFromBytes(uuid string) []byte {
 }
 
 func DcerpcRead(ctx *DataCtx, r *ReadRequest) (interface{}, error) {
+	data, err := DcerpcReadRaw(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := ReadResponse{
+		Header:        r.Header,
+		StructureSize: 0x0011,
+		DataOffset:    0x0050,
+		DataLength:    uint32(len(data)),
+		Data:          data,
+	}
+	return &resp, nil
+}
+
+func DcerpcReadRaw(ctx *DataCtx) ([]byte, error) {
 
 	pdb := ctx.session.pdb
 	var pdudata []byte
@@ -472,7 +488,7 @@ func DcerpcRead(ctx *DataCtx, r *ReadRequest) (interface{}, error) {
 	switch pdb.PacketType {
 	case PDUBind:
 		bind := pdb.Buffer.(PDUBindStruct)
-		ScndryAddr := append([]byte("\\PIPE\\srvsvc"), 0x0)
+		ScndryAddr := append([]byte("\\pipe\\srvsvc"), 0x0)
 		NDRSyntaxData := PDUUuidFromBytes(NDRSyntax)
 
 		var pduAck = &PDUBindAckStruct{
@@ -576,14 +592,7 @@ func DcerpcRead(ctx *DataCtx, r *ReadRequest) (interface{}, error) {
 		return nil, fmt.Errorf("Not Support")
 	}
 
-	resp := ReadResponse{
-		Header:        r.Header,
-		StructureSize: 0x0011,
-		DataOffset:    0x0050,
-		DataLength:    uint32(len(pdudata)),
-		Data:          pdudata,
-	}
-	return &resp, nil
+	return pdudata, nil
 }
 
 func DcerpcWrite(ctx *DataCtx, r *WriteRequest) (interface{}, error) {
