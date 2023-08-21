@@ -3,7 +3,7 @@ A Go package for smb server.
 
 Currently test pass with iphone files. 
 
-mac finder is WIP
+mac 12.6.8
 
 Here is a sample code from smb server:
 
