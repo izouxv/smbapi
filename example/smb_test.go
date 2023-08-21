@@ -12,6 +12,8 @@ import (
 	"github/izouxv/smbapi/smb"
 	"github/izouxv/smbapi/util"
 
+	"github.com/izouxv/logx"
+
 	"github.com/hirochachacha/go-smb2"
 	"golang.org/x/net/webdav"
 )
@@ -34,9 +36,9 @@ var config *smb.Config
 func init() {
 	Logger := func(r *http.Request, err error) {
 		if err != nil {
-			//	logx.Printf("WEBDAV [%s]: %s, ERROR: %s\n", r.Method, r.URL, err)
+			logx.Printf("WEBDAV [%s]: %s, ERROR: %s\n", r.Method, r.URL, err)
 		} else {
-			//	logx.Printf("WEBDAV [%s]: %s \n", r.Method, r.URL)
+			logx.Printf("WEBDAV [%s]: %s \n", r.Method, r.URL)
 		}
 	}
 
@@ -61,9 +63,9 @@ func init() {
 		},
 		Handle: func(path string) *smb.Handler {
 			return &smb.Handler{
-				&webdav.Handler{
+				Handler: &webdav.Handler{
 					Logger:     Logger,
-					Prefix:     "/" + anchor1.Name + "/",
+					Prefix:     "/", // not effect
 					FileSystem: webdav.Dir("/"),
 					LockSystem: webdav.NewMemLS(),
 				},
@@ -105,12 +107,14 @@ func startClient2(t *testing.T) {
 	}
 	defer s.Logoff()
 
+	fmt.Println("client mount TestDir1")
 	fs, err := s.Mount("TestDir1")
 	if err != nil {
 		panic(err)
 	}
 	defer fs.Umount()
 
+	fmt.Println("client Glob dirfs")
 	matches, err := iofs.Glob(fs.DirFS("."), "*")
 	if err != nil {
 		panic(err)
@@ -119,6 +123,7 @@ func startClient2(t *testing.T) {
 		fmt.Println(match)
 	}
 
+	fmt.Println("client WalkDir dirfs")
 	err = iofs.WalkDir(fs.DirFS("."), ".", func(path string, d iofs.DirEntry, err error) error {
 		fmt.Println(path, d, err)
 

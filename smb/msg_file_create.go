@@ -256,6 +256,8 @@ func (c GUID) UnmarshalBinary(data []byte, meta *encoder.Metadata) (interface{},
 
 const k_srvsvc = "srvsvc"
 
+var ipc_file = &webdavFile{filename: "$IPC", filenameAttr: "", webdavType: XATTR_FINDER_INFO_EA_NAME}
+
 func (data *CreateRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 	data.Header.Flags = SMB2_FLAGS_RESPONSE
 	Filename, err := encoder.FromUnicode(data.Filename)
@@ -325,73 +327,6 @@ func (data *CreateRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 	fid := atomic.AddUint64(&ctx.session.fileNum, 1)
 	guid := makeGUID(data.TreeID, fid)
 
-	if Filename == k_srvsvc {
-		ctx.session.srvsvc = guid
-
-		absPath := ctx.session.GetAbsPath(Filename)
-		if !util.FileExist(absPath) {
-			f, err := os.Create(absPath)
-			if err == nil {
-				f.Close()
-			}
-		}
-	}
-
-	var webfile webdav.File
-	isDir := data.FileAttributes&FILE_ATTRIBUTE_DIRECTORY > 0
-	if data.CreateDisposition == FILE_CREATE {
-		// openFlags = (os.O_RDWR | os.O_CREATE | os.O_TRUNC)
-		if isDir {
-			absPath := ctx.session.GetAbsPath(Filename)
-			err = ctx.Handle().FileSystem.Mkdir(context.Background(), absPath, 07777)
-			if err != nil {
-				return ERR(data.Header, STATUS_UNSUCCESSFUL)
-			}
-			openFlags = 0
-		} else {
-		}
-	}
-
-	ok, path, xattr := IsXAttr(Filename)
-	if ok { //处理xattr数据
-		// return ERR(data.Header, STATUS_NOT_IMPLEMENTED)
-		// } else if (data.AccessMask&FILE_READ_ATTRIBUTES > 0 || data.AccessMask&DELETE > 0) && ok {
-		absPath := ctx.session.GetAbsPath(path)
-		absPathAttr := ctx.session.GetAbsPath(Filename)
-		attrTag := XATTR_Key(xattr)
-		// 	// com.apple.lastuseddate#PS
-		// 	// com.apple.metadata _kMDItemUserTag s
-		// 	// com.apple.metadata _kMDItemFavoriteRank
-		openFlags = 0 // os.O_TRUNC会重置文件，所以需要把它换成0
-		// webfile, err = ctx.Handle().FileSystem.OpenFile(context.Background(), absPath, openFlags, 0666)
-		webfile = &webdavFile{filename: absPath, filenameAttr: absPathAttr, webdavType: attrTag}
-		_, err = webfile.Stat()
-		if err != nil {
-			webfile.Close()
-			return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
-		}
-	} else {
-		absPath := ctx.session.GetAbsPath(Filename)
-		webfile, err = ctx.Handle().FileSystem.OpenFile(context.Background(), absPath, openFlags, 0666)
-		if err != nil {
-			return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
-		}
-	}
-
-	if os.IsNotExist(err) {
-		return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
-	}
-	if err != nil {
-		return ERR(data.Header, STATUS_UNSUCCESSFUL)
-	}
-
-	ctx.session.openedFiles[guid] = webfile
-
-	fi, err := webfile.Stat()
-	if err != nil {
-		return ERR(data.Header, STATUS_UNSUCCESSFUL)
-	}
-
 	data.Header.Status = StatusOk
 	resp := CreateResponse{
 		Header:        data.Header,
@@ -400,18 +335,93 @@ func (data *CreateRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 		CreateAction:  createAction,
 	}
 
-	if fi.IsDir() {
-		resp.FileAttributes |= FILE_ATTRIBUTE_DIRECTORY
+	if data.TreeID == ctx.session.GetAnchor(NamedPipeShareName).tid {
+		if Filename != k_srvsvc {
+			return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
+		}
+		ctx.session.srvsvc = guid
+
+		// absPath := ctx.session.GetAbsPath(Filename)
+		// if !util.FileExist(absPath) {
+		// 	f, err := os.Create(absPath)
+		// 	if err == nil {
+		// 		f.Close()
+		// 	}
+		// }
+
+		ctx.session.openedFiles[guid] = ipc_file
+		resp.FileAttributes |= FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NORMAL
+		resp.AllocationSize = 0
+		resp.EndOfFile = 0
 	} else {
-		resp.FileAttributes |= FILE_ATTRIBUTE_NORMAL
-		resp.EndOfFile = uint64(fi.Size())
-		resp.AllocationSize = uint64(fi.Size())
+		var webfile webdav.File
+		isDir := data.FileAttributes&FILE_ATTRIBUTE_DIRECTORY > 0
+		if data.CreateDisposition == FILE_CREATE {
+			// openFlags = (os.O_RDWR | os.O_CREATE | os.O_TRUNC)
+			if isDir {
+				absPath := ctx.session.GetAbsPath(Filename)
+				err = ctx.Handle().FileSystem.Mkdir(context.Background(), absPath, 07777)
+				if err != nil {
+					return ERR(data.Header, STATUS_UNSUCCESSFUL)
+				}
+				openFlags = 0
+			} else {
+			}
+		}
+
+		ok, path, xattr := IsXAttr(Filename)
+		if ok { //处理xattr数据
+			// return ERR(data.Header, STATUS_NOT_IMPLEMENTED)
+			// } else if (data.AccessMask&FILE_READ_ATTRIBUTES > 0 || data.AccessMask&DELETE > 0) && ok {
+			absPath := ctx.session.GetAbsPath(path)
+			absPathAttr := ctx.session.GetAbsPath(Filename)
+			attrTag := XATTR_Key(xattr)
+			// 	// com.apple.lastuseddate#PS
+			// 	// com.apple.metadata _kMDItemUserTag s
+			// 	// com.apple.metadata _kMDItemFavoriteRank
+			openFlags = 0 // os.O_TRUNC会重置文件，所以需要把它换成0
+			// webfile, err = ctx.Handle().FileSystem.OpenFile(context.Background(), absPath, openFlags, 0666)
+			webfile = &webdavFile{filename: absPath, filenameAttr: absPathAttr, webdavType: attrTag}
+			_, err = webfile.Stat()
+			if err != nil {
+				webfile.Close()
+				return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
+			}
+		} else {
+			absPath := ctx.session.GetAbsPath(Filename)
+			webfile, err = ctx.Handle().FileSystem.OpenFile(context.Background(), absPath, openFlags, 0666)
+			if err != nil {
+				return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
+			}
+		}
+
+		if os.IsNotExist(err) {
+			return ERR(data.Header, STATUS_OBJECT_NAME_NOT_FOUND)
+		}
+		if err != nil {
+			return ERR(data.Header, STATUS_UNSUCCESSFUL)
+		}
+
+		ctx.session.openedFiles[guid] = webfile
+
+		fi, err := webfile.Stat()
+		if err != nil {
+			return ERR(data.Header, STATUS_UNSUCCESSFUL)
+		}
+
+		if fi.IsDir() {
+			resp.FileAttributes |= FILE_ATTRIBUTE_DIRECTORY
+		} else {
+			resp.FileAttributes |= FILE_ATTRIBUTE_NORMAL
+			resp.EndOfFile = uint64(fi.Size())
+			resp.AllocationSize = uint64(fi.Size())
+		}
+		mtime := timeToFiletime(fi.ModTime())
+		resp.CreationTime = mtime
+		resp.LastWriteTime = mtime
+		resp.ChangeTime = mtime
+		resp.LastAccessTime = 0
 	}
-	mtime := timeToFiletime(fi.ModTime())
-	resp.CreationTime = mtime
-	resp.LastWriteTime = mtime
-	resp.ChangeTime = mtime
-	resp.LastAccessTime = 0
 	ctx.latestFileId = guid
 	resp.CreateContexts = createContextsResp
 

@@ -38,10 +38,14 @@ type SetInfoResponse struct {
 func (data *SetInfoRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 	data.Header.Flags = SMB2_FLAGS_RESPONSE
 
-	if !data.FileId.IsEqual(LastGUID) {
-		panic(-1)
-	}
+	// if !data.FileId.IsEqual(LastGUID) {
+	// 	panic(-1)
+	// }
 
+	if data.InfoType != SMB2_0_INFO_FILE {
+		logx.Warnf("data.InfoType NotSupport: %v", data.InfoType)
+		return ERR(data.Header, STATUS_NOT_SUPPORTED)
+	}
 	if len(data.Buffer) > 0 {
 		fileid := ctx.FileID(data.FileId)
 		webfile, ok := ctx.session.openedFiles[fileid]
@@ -104,9 +108,11 @@ func (data *SetInfoRequest) ServerAction(ctx *DataCtx) (interface{}, error) {
 			}
 		default:
 			logx.Warnf("data.FileInfoClass NotSupport: %v", data.FileInfoClass)
+			return ERR(data.Header, STATUS_NOT_SUPPORTED)
 		}
 	}
 
+	data.Header.Status = StatusOk
 	resp := SetInfoResponse{
 		Header:        data.Header,
 		StructureSize: 2,

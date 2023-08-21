@@ -9,7 +9,7 @@ import "github/izouxv/smbapi/smb/encoder"
 type FileInformationClass uint8
 
 const (
-	// FileDirectoryInformation     FileInformationClass = 0x01 // Uses: Query
+	FileDirectoryInformation FileInformationClass = 0x01 // Uses: Query
 	// FileFullDirectoryInformation FileInformationClass = 0x02 // Uses: Query
 	// FileBothDirectoryInformation FileInformationClass = 0x03 // Uses: Query
 	FileBasicInformation FileInformationClass = 0x04 // Uses: Query, Set
@@ -65,6 +65,24 @@ const (
 // // FileFsVolumeFlagsInformation FileSystemInformationClass = 0x0A
 // FileFsSectorSizeInformation FileSystemInformationClass = 0x0B // Uses: Query
 )
+
+type FileDirectoryInfo struct {
+
+	//https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/b38bf518-9057-4c88-9ddd-5e2d3976a64b
+
+	NextOffset     uint32
+	FileIndex      uint32
+	CreateTime     uint64
+	LastAccessTime uint64
+	LastWriteTime  uint64
+	LastChangeTime uint64
+	EndOfFile      uint64
+	AllocationSize uint64
+	FileAttributes FileAttributes
+	FileNameLength uint32 `smb:"len:FileName"`
+	FileName       []byte
+	Reserved3      uint16
+}
 
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/4718fc40-e539-4014-8e33-b675af74e3e1
 

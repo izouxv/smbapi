@@ -66,25 +66,25 @@ const DialectSmb2_ALL = 0x02FF
 type Command uint16
 
 const (
-	CommandNegotiate Command = iota
-	CommandSessionSetup
-	CommandLogoff
-	CommandTreeConnect
-	CommandTreeDisconnect
-	CommandCreate
-	CommandClose
-	CommandFlush
-	CommandRead
-	CommandWrite
-	CommandLock
-	CommandIOCtl
-	CommandCancel
-	CommandEcho
-	CommandFind //QueryDirectory
-	CommandChangeNotify
-	CommandQueryInfo
-	CommandSetInfo
-	CommandOplockBreak
+	CommandNegotiate      Command = iota //0
+	CommandSessionSetup                  //1
+	CommandLogoff                        //2
+	CommandTreeConnect                   //3
+	CommandTreeDisconnect                //4
+	CommandCreate                        //5
+	CommandClose                         //6
+	CommandFlush                         //7
+	CommandRead                          //8
+	CommandWrite                         //9
+	CommandLock                          //0xa 10
+	CommandIOCtl                         //0xb 11
+	CommandCancel                        //0xc 12
+	CommandEcho                          //0xd 13
+	CommandFind                          //QueryDirectory //0xe 14
+	CommandChangeNotify                  //0xf 15
+	CommandQueryInfo                     //0x10 16
+	CommandSetInfo                       //0x11 17
+	CommandOplockBreak                   //0x12 18
 )
 
 func (c Command) String() string {

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"net"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github/izouxv/smbapi/gss"
@@ -145,6 +146,7 @@ func (s *SessionS) NegotiateProtocolServer() (err error) {
 }
 
 func (session *SessionS) SetActiveAnchorKey(activeAnchorKey string) bool {
+	activeAnchorKey = strings.ToUpper(activeAnchorKey)
 	_, ok := session.anchors[activeAnchorKey]
 	if ok {
 		session.activeAnchorKey = activeAnchorKey
@@ -159,12 +161,12 @@ func (session *SessionS) GetAbsPath(path string) string {
 }
 func (session *SessionS) SetAnchor(fileNum uint64, items []*Anchor) {
 	for _, item := range items {
-		session.anchors[item.Name] = item
+		session.anchors[strings.ToUpper(item.Name)] = item
 	}
 }
 
 func (s *SessionS) GetAnchor(name string) *Anchor {
-	item, ok := s.anchors[name]
+	item, ok := s.anchors[strings.ToUpper(name)]
 	if !ok {
 		return nil
 	}

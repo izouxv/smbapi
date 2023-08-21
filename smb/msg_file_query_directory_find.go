@@ -3,6 +3,7 @@ package smb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"sync/atomic"
@@ -19,7 +20,10 @@ func init() {
 type FindFlags uint8
 
 const (
-	RestartScans FindFlags = 0x0001
+	RestartScans      FindFlags = 0x0001
+	ReturnSingleEntry FindFlags = 0x0002
+	IndexSpecified    FindFlags = 0x0004
+	Reopen            FindFlags = 0x0010
 )
 
 func (c FindFlags) MarshalBinary(meta *encoder.Metadata) ([]byte, error) {
@@ -64,6 +68,45 @@ func (data *QueryDirectoryRequest) ServerAction(ctx *DataCtx) (interface{}, erro
 	if !ok {
 		return ERR(data.Header, STATUS_FILE_CLOSED)
 	}
+	stat, err := webfile.Stat()
+	if err != nil {
+		return ERR(data.Header, STATUS_INVALID_PARAMETER)
+	}
+	if !stat.IsDir() {
+		if (data.FindFlags & Reopen) != 0 {
+			return ERR(data.Header, STATUS_NOT_SUPPORTED)
+		} else {
+			return ERR(data.Header, STATUS_INVALID_PARAMETER)
+		}
+	}
+
+	getFileDirInfo := func(fi fs.FileInfo) *FileDirectoryInfo {
+		mtime := timeToFiletime(fi.ModTime())
+		filename := filepath.Base(fi.Name())
+		nameByte := encoder.ToUnicode(filename)
+		var fa FileAttributes
+		var AllocationSize, EndOfFile uint64
+		if fi.IsDir() {
+			fa |= FILE_ATTRIBUTE_DIRECTORY
+		} else {
+			// fa |= FILE_ATTRIBUTE_ARCHIVE
+			fa |= FILE_ATTRIBUTE_NORMAL
+			AllocationSize = uint64(fi.Size()) //磁盘大小, 会有碎片, 比endoffile大一点
+			EndOfFile = uint64(fi.Size())      //文件大小
+		}
+
+		// logx.Printf("fa: %v", fa)
+		return &FileDirectoryInfo{
+			CreateTime:     mtime,
+			LastAccessTime: mtime,
+			LastWriteTime:  mtime,
+			LastChangeTime: mtime,
+			FileName:       nameByte,
+			AllocationSize: AllocationSize, //磁盘大小, 会有碎片, 比endoffile大一点
+			EndOfFile:      EndOfFile,      //文件大小
+			FileAttributes: fa,
+		}
+	}
 
 	getFileIdBothDirInfo := func(fi fs.FileInfo) *FileIdBothDirectoryInfo {
 		mtime := timeToFiletime(fi.ModTime())
@@ -103,20 +146,29 @@ func (data *QueryDirectoryRequest) ServerAction(ctx *DataCtx) (interface{}, erro
 		}
 	}
 
+	getFileInfo := func(fi fs.FileInfo, level FileInformationClass) ([]byte, error) {
+		if level == FileDirectoryInformation {
+			return encoder.Marshal(getFileDirInfo(fi))
+		} else if level == FileIdBothDirectoryInformation {
+			return encoder.Marshal(getFileIdBothDirInfo(fi))
+		} else {
+			return nil, errors.New("Unsupported")
+		}
+	}
+
 	FileName, err := encoder.FromUnicode(data.FileName)
 	if err != nil {
 		return ERR(data.Header, STATUS_INVALID_PARAMETER)
-		return nil, err
 	}
 
 	var OutputBuffer []byte
-	if data.FindFlags == 0 {
-		return ERR(data.Header, STATUS_NO_MORE_FILES)
-	}
+	// if data.FindFlags == 0 {
+	// 	return ERR(data.Header, STATUS_NO_MORE_FILES)
+	// }
 
 	// data.FindFlags == 0   RestartScans
 	switch data.InfoLevel {
-	case FileIdBothDirectoryInformation:
+	case FileDirectoryInformation, FileIdBothDirectoryInformation:
 		switch FileName {
 		case "*":
 			fis, err := webfile.Readdir(0)
@@ -125,21 +177,23 @@ func (data *QueryDirectoryRequest) ServerAction(ctx *DataCtx) (interface{}, erro
 			}
 			var items [][]byte
 
-			selfFI, err := webfile.Stat()
-			if err != nil {
-				return nil, err
-			}
-			fis = append(fis, &fileInfoX{FileInfo: selfFI, name: "."})
-			fis = append(fis, &fileInfoX{FileInfo: selfFI, name: ".."})
+			// selfFI, err := webfile.Stat()
+			// if err != nil {
+			// 	return nil, err
+			// }
+			// fis = append(fis, &fileInfoX{FileInfo: selfFI, name: "."})
+			// fis = append(fis, &fileInfoX{FileInfo: selfFI, name: ".."})
 
 			for _, fi := range fis {
-				info := getFileIdBothDirInfo(fi)
-				itemBuf, err := encoder.Marshal(info)
+				itemBuf, err := getFileInfo(fi, data.InfoLevel)
 				if err != nil {
 					//如果有错误, 就继续. 这个看以后是否修改.
 					continue
 				}
 				items = append(items, itemBuf)
+				if (data.FindFlags & ReturnSingleEntry) != 0 {
+					break
+				}
 			}
 			if true {
 				for i := 0; i < len(items); i++ {
@@ -168,14 +222,15 @@ func (data *QueryDirectoryRequest) ServerAction(ctx *DataCtx) (interface{}, erro
 				}
 			}
 			if fi != nil {
-				info := getFileIdBothDirInfo(fi)
-				OutputBuffer, err = encoder.Marshal(info)
+				OutputBuffer, err = getFileInfo(fi, data.InfoLevel)
 			}
 			data.Header.Status = StatusOk
 			if len(OutputBuffer) == 0 {
 				return ERR(data.Header, STATUS_NO_SUCK_FILE)
 			}
 		}
+	default:
+		return ERR(data.Header, STATUS_NOT_SUPPORTED)
 	}
 
 	if err != nil {
