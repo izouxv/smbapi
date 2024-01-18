@@ -1,4 +1,6 @@
 # SMB2
+!!! NOT MAINTEN
+
 A Go package for smb server. 
 
 Currently test pass with iphone files. 
